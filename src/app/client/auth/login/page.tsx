@@ -10,11 +10,18 @@ import {
   VStack,
   useColorModeValue,
 } from "@chakra-ui/react";
-import { useRouter } from "next/navigation"; // Changed from "next/navigation"
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { setUser } from "@/lib/features/user/userSlice";
 import { useAppDispatch } from "@/lib/hooks";
 import Cookies from "js-cookie"; // Import js-cookie
+
+// Role-based redirection paths
+const roleBasedRedirects = {
+  manager: "/client/dashboard/manager/survey-report", // Manager dashboard
+  supervisor: "/client/dashboard/supervisor/asset-status", // Supervisor dashboard
+  cleaner: "/client/dashboard/supervisor/asset-status", // Cleaner dashboard
+};
 
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -27,22 +34,35 @@ const Login = () => {
   useEffect(() => {
     const storedUser = Cookies.get("user");
     if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      dispatch(setUser(userData));
-      router.push("/"); // Redirect to home if user data is found in cookies
+      try {
+        const userData = JSON.parse(storedUser); // Parse the JSON string
+        if (userData && userData.id) {
+          dispatch(setUser(userData));
+          router.push("/"); // Redirect to home if user data is valid
+        } else {
+          console.error("No valid user data found in cookie");
+        }
+      } catch (error) {
+        console.error("Error parsing user data from cookies:", error);
+      }
     }
   }, [dispatch, router]);
 
+  // Function to send OTP
   const handleSendOtp = async () => {
     setOtpSent(true);
-    console.log("otp");
-
-    const response = await axios.post("/server/auth/login", {
-      mobile_number: phoneNumber,
-    });
-    console.log(response.data);
+    try {
+      const response = await axios.post("/server/auth/login", {
+        mobile_number: phoneNumber,
+      });
+      console.log(response.data);
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      alert("Failed to send OTP. Please try again.");
+    }
   };
 
+  // Function to submit OTP and handle login
   const handleSubmitOtp = async () => {
     try {
       const response = await axios.post("/server/auth/login/verify-otp", {
@@ -53,19 +73,26 @@ const Login = () => {
       console.log("Login successful:", response.data);
 
       const userData = {
-        id: response.data.user.id,
-        user_name: response.data.user.user_name,
-        role: response.data.user.role,
+        id: response.data.user[0].id,
+        user_name: response.data.user[0].user_name,
+        role: response.data.user[0].role,
       };
 
-      // Save user data in Redux
-      dispatch(setUser(userData));
+      // Ensure userData is valid
+      if (userData && userData.id) {
+        // Save user data in Redux
+        dispatch(setUser(userData));
 
-      // Save user data in cookies
-      Cookies.set("user", JSON.stringify(userData), { expires: 7 }); // Expires in 7 days
+        // Save user data in cookies, properly stringify it
+        Cookies.set("user", JSON.stringify(userData), { expires: 7 }); // Expires in 7 days
 
-      // Redirect to home page
-      router.push("/");
+        // Redirect based on user role
+        const redirectPath = roleBasedRedirects[userData.role] || "/";
+        router.push(redirectPath); // Redirect to respective dashboard based on role
+      } else {
+        console.error("Invalid user data:", userData);
+        alert("Failed to log in. Invalid user data.");
+      }
     } catch (error) {
       console.error("Login error:", error);
       alert("Login failed. Please try again.");

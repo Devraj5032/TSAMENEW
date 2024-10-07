@@ -11,6 +11,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+
+  const roleBasedRedirects = {
+    manager: "/client/dashboard/manager/survey-report", // Manager dashboard
+    supervisor: "/client/dashboard/supervisor/asset-status", // Supervisor dashboard
+    cleaner: "/client/dashboard/supervisor/asset-status", // Cleaner dashboard
+  };
+
+  
   return (
     <html lang="en">
       <body className="p-4">

@@ -1,5 +1,6 @@
 "use client";
 
+
 import AssetStatusCards from "@/components/AssetStatusCard";
 import NotAuthorized from "@/components/NotAuthorized";
 import TableForAssetStatus from "@/components/TableForAssetStatus";
