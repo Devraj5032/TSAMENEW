@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks"; // Import the hook
 import { logout } from "@/lib/features/user/userSlice"; // Import the logout action
 import Cookies from "js-cookie"; // For removing user data from cookies
-import { useRouter } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 
 const LinksManager = [
   { name: "View asset status", path: "/client/dashboard/supervisor/asset-status" },
@@ -69,11 +69,12 @@ const NavBar = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleLogout = () => {
-    dispatch(logout()); // Clear Redux user state
-    Cookies.remove("user"); // Remove user data from cookies
-    router.push("/client/auth/login");
+  const handleLogout = async () => {
+    await dispatch(logout()); // Redux handles clearing the cookie
+    router.replace("/client/auth/login"); // Use router for navigation
   };
+  
+  
 
   return (
     <Box bg={useColorModeValue("blue.500", "blue.900")} px={4}>

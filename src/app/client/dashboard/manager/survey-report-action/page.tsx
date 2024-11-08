@@ -33,6 +33,12 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from "axios";
 import { format } from "date-fns";
+import { useAppSelector } from "@/lib/hooks";
+
+interface Supervisor {
+  id: Number;
+  user_name: String;
+}
 
 const SurveyReportAction = () => {
   const [fromDate, setFromDate] = useState(null);
@@ -44,18 +50,43 @@ const SurveyReportAction = () => {
   const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [selectedUser, setSelectedUser] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [supervisors, setSupervisors] = useState([]);
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [supervisor, setSupervisor] = useState("");
+  const [resolveImage1, setResolveImage1] = useState<File | null>(null);
+  const [resolveImage2, setResolveImage2] = useState<File | null>(null);
   const toast = useToast();
   const today = new Date();
   const [selectedDate, setSelectedDate] = useState("");
+  const [closingImage1, setClosingImage1] = useState<File | null>(null);
+  const [closingImage2, setClosingImage2] = useState<File | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [imagePreview1, setImagePreview1] = useState(null);
+  const [imagePreview2, setImagePreview2] = useState(null);
+
+  const user = useAppSelector((state) => state.user);
+
+  const handleImageUpload = (event, setImage, setPreview) => {
+    const file = event.target.files[0];
+    setImage(file);
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
 
   const getSupervisors = async () => {
     try {
-      const res = await axios.get(
-        "/server/api/supervisor/asset-status/getSupervisors"
-      );
-      setSupervisors(res.data.supervisors);
+      // const res = await axios.get(
+      //   "/server/api/supervisor/asset-status/getSupervisors"
+      // );
+      // setSupervisors(res.data.supervisors);
+      setSupervisors([
+        {
+          id: user.id,
+          user_name: user.user_name,
+        },
+      ]);
     } catch (error) {
       console.error("Error fetching supervisors:", error);
     }
@@ -85,6 +116,11 @@ const SurveyReportAction = () => {
       try {
         const formattedFromDate = format(fromDate, "yyyy-MM-dd");
         const formattedToDate = format(toDate, "yyyy-MM-dd");
+
+        console.log({
+          startDate: formattedFromDate,
+          endDate: formattedToDate,
+        });
 
         const response = await axios.post(
           "/server/api/manager/survey-closure-by-supervisor/retriveAverageRating",
@@ -140,58 +176,83 @@ const SurveyReportAction = () => {
 
   const handleSave = async () => {
     try {
-      const entryDateTimeString = `${selectedSurvey.entry_date.split("T")[0]}T${
-        selectedSurvey.entry_time
-      }`;
-      const entryDateTime = new Date(entryDateTimeString);
-
-      if (isNaN(entryDateTime.getTime())) {
-        throw new Error("Invalid date format");
-      }
-
-      const year = entryDateTime.getFullYear();
-      const month = String(entryDateTime.getMonth() + 1).padStart(2, "0");
-      const day = String(entryDateTime.getDate()).padStart(2, "0");
-      const hours = String(entryDateTime.getHours()).padStart(2, "0");
-      const minutes = String(entryDateTime.getMinutes()).padStart(2, "0");
-      const seconds = String(entryDateTime.getSeconds()).padStart(2, "0");
-
-      const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-
-      await axios.post(
-        "/server/api/manager/survey-closure-by-supervisor/insertIntoMatrixSurvey",
-        {
-          user_id: supervisor,
-          code: selectedSurvey.code,
-          date: formattedDate,
-          average_rating: selectedSurvey.average_rating,
-          remarks,
-          resolve_date_time: selectedDate,
+      if (user.role == "supervisor") {
+        if (!selectedSurvey.scanned_date || !selectedSurvey.entry_time) {
+          throw new Error("Date or time is missing.");
         }
-      );
 
-      toast({
-        title: "Success",
-        description: "Survey data has been saved successfully.",
-        status: "success",
-        duration: 5000,
-        isClosable: true,
-      });
+        const combinedDateTime = `${selectedSurvey.scanned_date} ${selectedSurvey.entry_time}.000`;
+        let resolveDateTime = selectedDate ? new Date(selectedDate) : null;
 
-      // Reload data after saving
-      await handleSubmit(); // Re-fetch the data
+        if (resolveDateTime) {
+          resolveDateTime.setHours(resolveDateTime.getHours() + 5);
+          resolveDateTime.setMinutes(resolveDateTime.getMinutes() + 30);
+          resolveDateTime = resolveDateTime
+            .toISOString()
+            .replace("T", " ")
+            .replace("Z", "");
+        }
 
-      onClose(); // Close the modal after reloading data
+        const formData = new FormData();
+        formData.append("user_id", supervisor);
+        formData.append("code", selectedSurvey.code);
+        formData.append("date", combinedDateTime);
+        formData.append("average_rating", selectedSurvey.average_rating);
+        formData.append("remarks", remarks || "");
+        formData.append("resolve_date_time", resolveDateTime || "");
+
+        // Convert image files to Base64
+        if (resolveImage1) {
+          const base64Image1 = await toBase64(resolveImage1);
+          formData.append("resolve_image_1", base64Image1);
+        }
+        if (resolveImage2) {
+          const base64Image2 = await toBase64(resolveImage2);
+          formData.append("resolve_image_2", base64Image2);
+        }
+
+        await axios.post(
+          "/server/api/manager/survey-closure-by-supervisor/insertIntoMatrixSurvey",
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+
+        toast({
+          title: "Success",
+          description: "Survey has been saved successfully.",
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        });
+        handleSubmit();
+        onClose();
+      } else if (user.role == "manager") {
+      }
     } catch (error) {
+      console.error(
+        "Error saving data:",
+        error.response ? error.response.data : error.message
+      );
       toast({
         title: "Error",
-        description: "An error occurred while saving the data.",
+        description: error.response
+          ? error.response.data.message
+          : "An error occurred while saving the data.",
         status: "error",
         duration: 5000,
         isClosable: true,
       });
     }
   };
+
+  // Helper function to convert file to Base64
+  const toBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(",")[1]); // Get only the Base64 part
+      reader.onerror = (error) => reject(error);
+    });
 
   // Function to format questions_and_ratings
   const formatQuestionsAndRatings = (questionsAndRatings) => {
@@ -300,131 +361,355 @@ const SurveyReportAction = () => {
         </Box>
       )}
 
-      {!loading && apiResponse.length > 0 && (
-        <Box mt={6}>
-          <div>
-            {apiResponse.map((survey, index) => (
-              <Box
-                key={index}
-                borderWidth="1px"
-                borderRadius="md"
-                p={8}
-                mb={4}
-                boxShadow="md"
-                bg="white"
-              >
+      {!loading &&
+        apiResponse.length > 0 &&
+        (user.role == "manager" ? (
+          <Box mt={6}>
+            <div>
+              {apiResponse.map((survey, index) => (
                 <Box
-                  display={"flex"}
-                  gap={3}
-                  justifyContent={"space-between"}
-                  flexWrap={"wrap"}
+                  key={index}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  p={8}
+                  mb={4}
+                  boxShadow="md"
+                  bg="white"
                 >
-                  <Box>
-                  <Text fontWeight="bold">Code: {survey.code}</Text>
-                  <Text fontWeight="bold">Locality: {survey.locality}</Text>
-                  <Text fontWeight="bold">Area: {survey.area}</Text>
-                  <Text fontWeight="bold">Zone: {survey.zone}</Text>
-                  </Box>
-                  <Box>
-                    <Text fontWeight="bold">Questions and Ratings:</Text>
-                    
+                  <Box
+                    display="flex"
+                    gap={3}
+                    justifyContent="space-between"
+                    flexWrap="wrap"
+                  >
+                    {/* Survey Details */}
                     <Box>
-                      {formatQuestionsAndRatings(survey.questions_and_ratings)}
+                      <Text fontWeight="bold">Code: {survey.code}</Text>
+                      <Text fontWeight="bold">Locality: {survey.locality}</Text>
+                      <Text fontWeight="bold">Area: {survey.area}</Text>
+                      <Text fontWeight="bold">Zone: {survey.zone}</Text>
                     </Box>
-                  </Box>
-                  <Box>
-                  <Text fontWeight="bold">
-                    Average Rating: {formatAverageRating(survey.average_rating)}
-                  </Text>
-                  <Text fontWeight="bold">Scanned date: {survey?.scanned_date}</Text>
-                  </Box>
-                  <Box width={"300px"}>
-                    <Text fontWeight="bold">Remarks:</Text>
-                    <Text
-                      fontWeight="bold"
-                      whiteSpace="normal" // Allow text to wrap
-                    >
-                      {survey.remarks.length === 0 ? "NONE" : survey.remarks}
-                    </Text>
-                  </Box>
 
-                  {survey.resolve_remarks ? (
+                    {/* Questions and Ratings */}
                     <Box>
-                      <Box><Text fontWeight={"bold"}>Resolving remarks: </Text> <Text>{survey.resolve_remarks}</Text></Box>
-                      <Box><Text fontWeight={"bold"}>Resolving Supervisor: </Text><Text>{survey.resolving_supervisor}</Text></Box>
+                      <Text fontWeight="bold">Questions and Ratings:</Text>
                       <Box>
-                  <Text fontWeight="bold">Resolved date: {survey?.resolved_date}</Text></Box>
+                        {formatQuestionsAndRatings(
+                          survey.questions_and_ratings
+                        )}
+                      </Box>
                     </Box>
-                  ) : survey.average_rating >= 4 ? (
-                    <div></div>
-                  ) : (
-                    <Button
-                      colorScheme="blue"
-                      onClick={() => handleActionClick(survey)}
-                      isDisabled={survey.average_rating >= 4}
-                    >
-                      Take Action
-                    </Button>
-                  )}
+
+                    {/* Average Rating and Scanned Date */}
+                    <Box>
+                      <Text fontWeight="bold">
+                        Average Rating:{" "}
+                        {formatAverageRating(survey.average_rating)}
+                      </Text>
+                      <Text fontWeight="bold">
+                        Scanned date: {survey?.scanned_date}
+                      </Text>
+                    </Box>
+
+                    {/* Remarks Section */}
+                    <Box width="300px">
+                      <Text fontWeight="bold">Remarks:</Text>
+                      <Text fontWeight="bold" whiteSpace="normal">
+                        {survey.remarks.length === 0 ? "NONE" : survey.remarks}
+                      </Text>
+                    </Box>
+
+                    {/* Resolving Remarks Section */}
+                    {survey.resolve_remarks && (
+                      <Box>
+                        <Box>
+                          <Text fontWeight="bold">Resolving remarks:</Text>
+                          <Text>{survey.resolve_remarks}</Text>
+                        </Box>
+                        <Box>
+                          <Text fontWeight="bold">Resolving Supervisor:</Text>
+                          <Text>{survey.resolving_supervisor}</Text>
+                        </Box>
+                        <Box>
+                          <Text fontWeight="bold">
+                            Resolved date: {survey?.resolved_date}
+                          </Text>
+                        </Box>
+
+                        {survey?.resolved_date && (
+                          <Button
+                            colorScheme="blue"
+                            onClick={() => handleActionClick(survey)}
+                            // isDisabled={survey.average_rating >= 4}
+                            marginTop={4}
+                          >
+                            Close ticket
+                          </Button>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
-            ))}
-          </div>
-        </Box>
-      )}
+              ))}
+            </div>
+          </Box>
+        ) : (
+          <Box mt={6}>
+            <div>
+              {apiResponse.map((survey, index) => (
+                <Box
+                  key={index}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  p={8}
+                  mb={4}
+                  boxShadow="md"
+                  bg="white"
+                >
+                  <Box
+                    display={"flex"}
+                    gap={3}
+                    justifyContent={"space-between"}
+                    flexWrap={"wrap"}
+                  >
+                    <Box>
+                      <Text fontWeight="bold">Code: {survey.code}</Text>
+                      <Text fontWeight="bold">Locality: {survey.locality}</Text>
+                      <Text fontWeight="bold">Area: {survey.area}</Text>
+                      <Text fontWeight="bold">Zone: {survey.zone}</Text>
+                    </Box>
+                    <Box>
+                      <Text fontWeight="bold">Questions and Ratings:</Text>
+
+                      <Box>
+                        {formatQuestionsAndRatings(
+                          survey.questions_and_ratings
+                        )}
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Text fontWeight="bold">
+                        Average Rating:{" "}
+                        {formatAverageRating(survey.average_rating)}
+                      </Text>
+                      <Text fontWeight="bold">
+                        Scanned date: {survey?.scanned_date}
+                      </Text>
+                    </Box>
+                    <Box width={"300px"}>
+                      <Text fontWeight="bold">Remarks:</Text>
+                      <Text
+                        fontWeight="bold"
+                        whiteSpace="normal" // Allow text to wrap
+                      >
+                        {survey.remarks.length === 0 ? "NONE" : survey.remarks}
+                      </Text>
+                    </Box>
+
+                    {survey.resolve_remarks ? (
+                      <Box>
+                        <Box>
+                          <Text fontWeight={"bold"}>Resolving remarks: </Text>{" "}
+                          <Text>{survey.resolve_remarks}</Text>
+                        </Box>
+                        <Box>
+                          <Text fontWeight={"bold"}>
+                            Resolving Supervisor:{" "}
+                          </Text>
+                          <Text>{survey.resolving_supervisor}</Text>
+                        </Box>
+                        <Box>
+                          <Text fontWeight="bold">
+                            Resolved date: {survey?.resolved_date}
+                          </Text>
+                        </Box>
+                      </Box>
+                    ) : survey.average_rating >= 4 ? (
+                      <div></div>
+                    ) : (
+                      <Button
+                        colorScheme="blue"
+                        onClick={() => handleActionClick(survey)}
+                        isDisabled={survey.average_rating >= 4}
+                      >
+                        Take Action
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </div>
+          </Box>
+        ))}
 
       {/* Modal for Action */}
       {selectedSurvey && (
         <Modal isOpen={isOpen} onClose={onClose}>
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>Action for {selectedSurvey.questions}</ModalHeader>
+            <ModalHeader>Action for {selectedSurvey.code}</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-              <FormControl w={"400px"} isRequired>
-                <FormLabel>Select Supervisor</FormLabel>
-                <Select value={supervisor} onChange={handleSupervisorChange}>
-                  <option value="">Select supervisor</option>
-                  {supervisors.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {`${item.user_name}`}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
+              {user.role == "manager" ? (
+                <>
+                  <FormControl isRequired>
+                    <FormLabel>Select Manager</FormLabel>
+                    <Select
+                      value={supervisor}
+                      onChange={(e) => setSupervisor(e.target.value)}
+                    >
+                      <option value="">Select manager</option>
+                      {supervisors.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.user_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
 
-              <FormControl mt={4} position="relative">
-                <FormLabel>Date</FormLabel>
-                <Input
-                  placeholder="Select date"
-                  value={selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""}
-                  onClick={() => setCalendarOpen(true)}
-                  readOnly
-                />
-                {calendarOpen && (
-                  <Box position="absolute" zIndex={10}>
-                    <DatePicker
-                      selected={selectedDate}
-                      onChange={(date) => {
-                        setSelectedDate(date);
-                        setCalendarOpen(false);
-                      }}
-                      onClickOutside={() => setCalendarOpen(false)}
-                      inline
-                      dateFormat="yyyy-MM-dd"
+                  <FormControl mt={4}>
+                    <FormLabel>Date</FormLabel>
+                    <Input
+                      placeholder="Select closing date"
+                      value={
+                        selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""
+                      }
+                      onClick={() => setCalendarOpen(true)}
+                      readOnly
                     />
-                  </Box>
-                )}
-              </FormControl>
+                    {calendarOpen && (
+                      <Box position="absolute" zIndex={10}>
+                        <DatePicker
+                          selected={selectedDate}
+                          onChange={(date) => {
+                            setSelectedDate(date);
+                            setCalendarOpen(false);
+                          }}
+                          onClickOutside={() => setCalendarOpen(false)}
+                          inline
+                          dateFormat="yyyy-MM-dd"
+                          minDate={selectedSurvey.resolved_date}
+                          maxDate={today}
+                        />
+                      </Box>
+                    )}
+                  </FormControl>
 
-              <FormControl mt={4}>
-                <FormLabel>Remarks</FormLabel>
-                <Textarea
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  placeholder="Enter remarks"
-                />
-              </FormControl>
+                  <FormControl mt={4}>
+                    <FormLabel>Remarks</FormLabel>
+                    <Textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="Enter closing remarks"
+                    />
+                  </FormControl>
+
+                  <FormControl mt={4}>
+                    <FormLabel>Upload Closing Image 1</FormLabel>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) =>
+                        handleImageUpload(e, setClosingImage1, setImagePreview1)
+                      }
+                    />
+                    {imagePreview1 && (
+                      <Box mt={2}>
+                        <Text>Preview:</Text>
+                        <img
+                          src={imagePreview1}
+                          alt="Closing Image 1 Preview"
+                          style={{ width: "100%", maxWidth: "150px" }}
+                        />
+                      </Box>
+                    )}
+                  </FormControl>
+
+                  <FormControl mt={4}>
+                    <FormLabel>Upload Closing Image 2</FormLabel>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) =>
+                        handleImageUpload(e, setClosingImage2, setImagePreview2)
+                      }
+                    />
+                    {imagePreview2 && (
+                      <Box mt={2}>
+                        <Text>Preview:</Text>
+                        <img
+                          src={imagePreview2}
+                          alt="Closing Image 2 Preview"
+                          style={{ width: "100%", maxWidth: "150px" }}
+                        />
+                      </Box>
+                    )}
+                  </FormControl>
+                </>
+              ) : (
+                <>
+                  <FormControl mt={4} position="relative">
+                    <FormLabel>Date</FormLabel>
+                    <Input
+                      placeholder="Select date"
+                      value={
+                        selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""
+                      }
+                      onClick={() => setCalendarOpen(true)}
+                      readOnly
+                    />
+                    {calendarOpen && (
+                      <Box position="absolute" zIndex={10}>
+                        <DatePicker
+                          selected={selectedDate}
+                          onChange={(date) => {
+                            setSelectedDate(date);
+                            setCalendarOpen(false);
+                          }}
+                          onClickOutside={() => setCalendarOpen(false)}
+                          inline
+                          dateFormat="yyyy-MM-dd"
+                          minDate={selectedSurvey.scanned_date}
+                          // maxDate={() => {
+                          //   return Date.now()
+                          // }}
+                        />
+                      </Box>
+                    )}
+                  </FormControl>
+
+                  <FormControl mt={4}>
+                    <FormLabel>Remarks</FormLabel>
+                    <Textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="Enter remarks"
+                    />
+                  </FormControl>
+
+                  <FormControl mt={4}>
+                    <FormLabel>Upload Resolve Image 1</FormLabel>
+                    <Input
+                      type="file"
+                      onChange={(e) =>
+                        setResolveImage1(e.target.files?.[0] || null)
+                      }
+                    />
+                  </FormControl>
+
+                  <FormControl mt={4}>
+                    <FormLabel>Upload Resolve Image 2</FormLabel>
+                    <Input
+                      type="file"
+                      onChange={(e) =>
+                        setResolveImage2(e.target.files?.[0] || null)
+                      }
+                    />
+                  </FormControl>
+                </>
+              )}
             </ModalBody>
 
             <ModalFooter>
@@ -432,7 +717,7 @@ const SurveyReportAction = () => {
                 colorScheme="blue"
                 mr={3}
                 onClick={() => {
-                  handleSave(), onClose();
+                  handleSave();
                 }}
               >
                 Save
