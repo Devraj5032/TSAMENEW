@@ -356,7 +356,7 @@ const SurveyReportAction = () => {
       "Resolving Supervisor": survey.resolving_supervisor || "N/A",
       "Resolved Date": survey.resolved_date || "N/A",
       "Closing Remarks": survey.closing_remarks || "N/A",
-      "Closing Manager": survey.closing_manager || "N/A",
+      "Closing Manager": (survey?.resolving_supervisor && survey.resolving_supervisor[1]) || "N/A",
       "Closing Date": survey.closing_date_time || "N/A",
     }));
 
@@ -529,7 +529,7 @@ const SurveyReportAction = () => {
                         </Box>
                         <Box>
                           <Text fontWeight="bold">Resolving Supervisor:</Text>
-                          <Text>{survey.resolving_supervisor}</Text>
+                          <Text>{survey.resolving_supervisor[0]}</Text>
                         </Box>
                         <Box>
                           <Text fontWeight="bold">
@@ -611,6 +611,12 @@ const SurveyReportAction = () => {
                               <Box>
                                 <Text fontWeight="bold">Closing remarks:</Text>
                                 <Text>{survey.closing_remarks}</Text>
+                              </Box>
+                              <Box>
+                                <Text fontWeight="bold">
+                                  Resolving Manager:
+                                </Text>
+                                <Text>{survey.resolving_supervisor[1]}</Text>
                               </Box>
                               {survey.closing_image_1 && (
                                 <Text
@@ -771,7 +777,7 @@ const SurveyReportAction = () => {
                           <Text fontWeight={"bold"}>
                             Resolving Supervisor:{" "}
                           </Text>
-                          <Text>{survey.resolving_supervisor}</Text>
+                          <Text>{survey.resolving_supervisor[0]}</Text>
                         </Box>
                         <Box>
                           <Text fontWeight="bold">
