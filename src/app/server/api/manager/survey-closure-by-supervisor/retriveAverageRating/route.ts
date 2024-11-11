@@ -83,13 +83,11 @@ export async function POST(req: NextRequest) {
 
       if (item.average_rating < 4) {
         const matrixResult = await pool.request().query(`
-          SELECT *,
-       CONVERT(VARCHAR, msu.resolve_date_time, 23) AS resolved_date,
-       CONVERT(VARCHAR, msu.survey_date, 23) AS scanned_date
-FROM tata_asset_mgmt.jusco_asset_mgmt.matrix_survey_close AS msu
-JOIN tata_asset_mgmt.jusco_asset_mgmt.data_users AS du_user ON du_user.id = msu.user_id
-JOIN tata_asset_mgmt.jusco_asset_mgmt.data_users AS du_closer ON du_closer.id = msu.closing_user_id
-WHERE msu.code = '${item.code}' AND msu.survey_date = '${formattedDateTime}';
+          SELECT *, CONVERT(VARCHAR, msu.resolve_date_time, 23) AS resolved_date,
+                 CONVERT(VARCHAR, msu.survey_date, 23) AS scanned_date
+          FROM tata_asset_mgmt.jusco_asset_mgmt.matrix_survey_close as msu
+          JOIN tata_asset_mgmt.jusco_asset_mgmt.data_users as du on du.id = msu.user_id
+          WHERE code = '${item.code}' AND survey_date = '${formattedDateTime}';
         `);
 
         console.log(matrixResult.recordset[0]);
@@ -102,7 +100,7 @@ WHERE msu.code = '${item.code}' AND msu.survey_date = '${formattedDateTime}';
           item.resolve_image_1 = matrixResult.recordset[0].resolve_image_1;
           item.resolve_image_2 = matrixResult.recordset[0].resolve_image_2;
           item.closing_remarks = matrixResult.recordset[0].closing_remarks;
-          // item.closing_user_id = matrixResult.recordset[0].closing_user_id;
+          item.closing_user_id = matrixResult.recordset[0].closing_user_id;
           item.closing_date_time = matrixResult.recordset[0].closing_date_time;
           item.closing_image_1 = matrixResult.recordset[0].closing_image_1;
           item.closing_image_2 = matrixResult.recordset[0].closing_image_2;

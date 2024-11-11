@@ -612,12 +612,12 @@ const SurveyReportAction = () => {
                                 <Text fontWeight="bold">Closing remarks:</Text>
                                 <Text>{survey.closing_remarks}</Text>
                               </Box>
-                              <Box>
+                              {/* <Box>
                                 <Text fontWeight="bold">
                                   Resolving Manager:
                                 </Text>
                                 <Text>{survey.resolving_supervisor[1]}</Text>
-                              </Box>
+                              </Box> */}
                               {survey.closing_image_1 && (
                                 <Text
                                   mt="2"
@@ -777,7 +777,7 @@ const SurveyReportAction = () => {
                           <Text fontWeight={"bold"}>
                             Resolving Supervisor:{" "}
                           </Text>
-                          <Text>{survey.resolving_supervisor[0]}</Text>
+                          <Text>{survey.resolving_supervisor}</Text>
                         </Box>
                         <Box>
                           <Text fontWeight="bold">
