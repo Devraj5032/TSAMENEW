@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
                  CONVERT(VARCHAR, msu.survey_date, 23) AS scanned_date
           FROM tata_asset_mgmt.jusco_asset_mgmt.matrix_survey_close as msu
           JOIN tata_asset_mgmt.jusco_asset_mgmt.data_users as du on du.id = msu.user_id
+          LEFT JOIN tata_asset_mgmt.jusco_asset_mgmt.data_users AS du2 ON du2.id = msu.closing_user_id
           WHERE code = '${item.code}' AND survey_date = '${formattedDateTime}';
         `);
 

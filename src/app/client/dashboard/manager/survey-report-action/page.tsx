@@ -684,10 +684,10 @@ const SurveyReportAction = () => {
                                   View Image
                                 </Text>
                               )}
-                              {/* <Box>
+                              <Box>
                               <Text fontWeight="bold">Closing Manager:</Text>
-                              <Text>{survey.closing_manager}</Text>
-                            </Box> */}
+                              <Text>{survey.closing_user_name}</Text>
+                            </Box>
                               <Box>
                                 <Text fontWeight="bold">
                                   Closing date: {survey?.closing_date_time}
@@ -777,7 +777,7 @@ const SurveyReportAction = () => {
                           <Text fontWeight={"bold"}>
                             Resolving Supervisor:{" "}
                           </Text>
-                          <Text>{survey.resolving_supervisor}</Text>
+                          <Text>{survey.resolving_supervisor[0]}</Text>
                         </Box>
                         <Box>
                           <Text fontWeight="bold">
