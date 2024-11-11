@@ -34,6 +34,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import axios from "axios";
 import { format } from "date-fns";
 import { useAppSelector } from "@/lib/hooks";
+import { CSVLink } from "react-csv";
 
 interface Supervisor {
   id: Number;
@@ -73,6 +74,23 @@ const SurveyReportAction = () => {
       reader.onloadend = () => setPreview(reader.result);
       reader.readAsDataURL(file);
     }
+  };
+
+  const bufferToBase64 = (bufferObj) => {
+    // Check if the bufferObj is an actual Buffer or needs to be converted
+    let buffer;
+    if (Buffer.isBuffer(bufferObj)) {
+      buffer = bufferObj; // If already a Buffer, use it directly
+    } else if (bufferObj?.data) {
+      // If bufferObj has a .data property, reconstruct the Buffer
+      buffer = Buffer.from(bufferObj.data);
+    } else {
+      console.error("Invalid buffer format:", bufferObj);
+      return null;
+    }
+
+    // Convert to Base64 string
+    return `data:image/jpeg;base64,${buffer.toString("base64")}`;
   };
 
   const getSupervisors = async () => {
@@ -227,6 +245,55 @@ const SurveyReportAction = () => {
         handleSubmit();
         onClose();
       } else if (user.role == "manager") {
+        if (!selectedSurvey.scanned_date || !selectedSurvey.entry_time) {
+          throw new Error("Date or time is missing.");
+        }
+
+        const combinedDateTime = `${selectedSurvey.scanned_date} ${selectedSurvey.entry_time}.000`;
+        let resolveDateTime = selectedDate ? new Date(selectedDate) : null;
+
+        if (resolveDateTime) {
+          resolveDateTime.setHours(resolveDateTime.getHours() + 5);
+          resolveDateTime.setMinutes(resolveDateTime.getMinutes() + 30);
+          resolveDateTime = resolveDateTime
+            .toISOString()
+            .replace("T", " ")
+            .replace("Z", "");
+        }
+
+        const formData = new FormData();
+        formData.append("user_id", supervisor);
+        formData.append("code", selectedSurvey.code);
+        formData.append("date", combinedDateTime);
+        formData.append("average_rating", selectedSurvey.average_rating);
+        formData.append("remarks", remarks || "");
+        formData.append("resolve_date_time", resolveDateTime || "");
+
+        // Convert image files to Base64
+        if (resolveImage1) {
+          const base64Image1 = await toBase64(resolveImage1);
+          formData.append("resolve_image_1", base64Image1);
+        }
+        if (resolveImage2) {
+          const base64Image2 = await toBase64(resolveImage2);
+          formData.append("resolve_image_2", base64Image2);
+        }
+
+        await axios.post(
+          "/server/api/manager/survey-closure-by-supervisor/insertIntoMatrixSurveyClosing",
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+
+        toast({
+          title: "Success",
+          description: "Survey has been saved successfully.",
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        });
+        handleSubmit();
+        onClose();
       }
     } catch (error) {
       console.error(
@@ -274,6 +341,29 @@ const SurveyReportAction = () => {
     const selectedSupervisor = e.target.value;
     setSupervisor(selectedSupervisor); // Update supervisor state
   };
+
+  function handleDownloadCSV() {
+    // Map the survey data to exclude questions and ratings
+    const csvData = apiResponse.map((survey) => ({
+      Code: survey.code,
+      Locality: survey.locality,
+      Area: survey.area,
+      Zone: survey.zone,
+      "Average Rating": formatAverageRating(survey.average_rating),
+      "Scanned Date": survey.scanned_date,
+      Remarks: survey.remarks || "NONE",
+      "Resolving Remarks": survey.resolve_remarks || "N/A",
+      "Resolving Supervisor": survey.resolving_supervisor || "N/A",
+      "Resolved Date": survey.resolved_date || "N/A",
+      "Closing Remarks": survey.closing_remarks || "N/A",
+      "Closing Manager": survey.closing_manager || "N/A",
+      "Closing Date": survey.closing_date_time || "N/A",
+    }));
+
+    return csvData;
+  }
+
+  // const handleDownloadCSV = async () => {};
 
   return (
     <Box
@@ -361,6 +451,17 @@ const SurveyReportAction = () => {
         </Box>
       )}
 
+      {apiResponse.length > 0 && (
+        <Button colorScheme="blue">
+          <CSVLink
+            data={handleDownloadCSV()}
+            filename="survey_data.csv"
+            style={{ color: "white" }}
+          >
+            Download CSV
+          </CSVLink>
+        </Button>
+      )}
       {!loading &&
         apiResponse.length > 0 &&
         (user.role == "manager" ? (
@@ -435,8 +536,162 @@ const SurveyReportAction = () => {
                             Resolved date: {survey?.resolved_date}
                           </Text>
                         </Box>
+                        <Box>
+                          {survey.resolve_image_1 && (
+                            <Text
+                              mt="2"
+                              color="blue"
+                              _hover={{
+                                textDecoration: "underline",
+                                cursor: "pointer",
+                              }}
+                              onClick={() => {
+                                // Convert the buffer to Base64
+                                const base64Image = bufferToBase64(
+                                  survey.resolve_image_1
+                                );
 
-                        {survey?.resolved_date && (
+                                console.log(base64Image);
+
+                                // Open a new window with an image
+                                const newWindow = window.open("", "_blank");
+                                newWindow.document.title = "Resolved Image"; // Set the title of the new window
+                                newWindow.document.write(`
+            <html>
+              <head><title>Resolved Image</title></head>
+              <body>
+                <img src="${base64Image}" alt="Resolved Image" style="width: 100%; max-width: 800px;"/>
+              </body>
+            </html>
+          `);
+                                newWindow.document.close(); // Ensure the document is properly loaded
+                              }}
+                            >
+                              View Image
+                            </Text>
+                          )}
+                          {survey.resolve_image_2 && (
+                            <Text
+                              mt="2"
+                              color="blue"
+                              _hover={{
+                                textDecoration: "underline",
+                                cursor: "pointer",
+                              }}
+                              onClick={() => {
+                                // Convert the buffer to Base64
+                                const base64Image = bufferToBase64(
+                                  survey.resolve_image_2
+                                );
+
+                                console.log(base64Image);
+
+                                // Open a new window with an image
+                                const newWindow = window.open("", "_blank");
+                                newWindow.document.title = "Resolved Image"; // Set the title of the new window
+                                newWindow.document.write(`
+            <html>
+              <head><title>Resolved Image</title></head>
+              <body>
+                <img src="${base64Image}" alt="Resolved Image" style="width: 100%; max-width: 800px;"/>
+              </body>
+            </html>
+          `);
+                                newWindow.document.close(); // Ensure the document is properly loaded
+                              }}
+                            >
+                              View Image
+                            </Text>
+                          )}
+                        </Box>
+
+                        <Box>
+                          {survey.closing_remarks && (
+                            <Box>
+                              <Box>
+                                <Text fontWeight="bold">Closing remarks:</Text>
+                                <Text>{survey.closing_remarks}</Text>
+                              </Box>
+                              {survey.closing_image_1 && (
+                                <Text
+                                  mt="2"
+                                  color="blue"
+                                  _hover={{
+                                    textDecoration: "underline",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={() => {
+                                    // Convert the buffer to Base64
+                                    const base64Image = bufferToBase64(
+                                      survey.closing_image_1
+                                    );
+
+                                    console.log(base64Image);
+
+                                    // Open a new window with an image
+                                    const newWindow = window.open("", "_blank");
+                                    newWindow.document.title = "Resolved Image"; // Set the title of the new window
+                                    newWindow.document.write(`
+            <html>
+              <head><title>Resolved Image</title></head>
+              <body>
+                <img src="${base64Image}" alt="Resolved Image" style="width: 100%; max-width: 800px;"/>
+              </body>
+            </html>
+          `);
+                                    newWindow.document.close(); // Ensure the document is properly loaded
+                                  }}
+                                >
+                                  View Image
+                                </Text>
+                              )}
+                              {survey.closing_image_2 && (
+                                <Text
+                                  mt="2"
+                                  color="blue"
+                                  _hover={{
+                                    textDecoration: "underline",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={() => {
+                                    // Convert the buffer to Base64
+                                    const base64Image = bufferToBase64(
+                                      survey.closing_image_2
+                                    );
+
+                                    console.log(base64Image);
+
+                                    // Open a new window with an image
+                                    const newWindow = window.open("", "_blank");
+                                    newWindow.document.title = "Resolved Image"; // Set the title of the new window
+                                    newWindow.document.write(`
+            <html>
+              <head><title>Resolved Image</title></head>
+              <body>
+                <img src="${base64Image}" alt="Resolved Image" style="width: 100%; max-width: 800px;"/>
+              </body>
+            </html>
+          `);
+                                    newWindow.document.close(); // Ensure the document is properly loaded
+                                  }}
+                                >
+                                  View Image
+                                </Text>
+                              )}
+                              {/* <Box>
+                              <Text fontWeight="bold">Closing Manager:</Text>
+                              <Text>{survey.closing_manager}</Text>
+                            </Box> */}
+                              <Box>
+                                <Text fontWeight="bold">
+                                  Closing date: {survey?.closing_date_time}
+                                </Text>
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+
+                        {survey?.resolved_date && !survey.closing_remarks && (
                           <Button
                             colorScheme="blue"
                             onClick={() => handleActionClick(survey)}
@@ -608,44 +863,20 @@ const SurveyReportAction = () => {
                     <FormLabel>Upload Closing Image 1</FormLabel>
                     <Input
                       type="file"
-                      accept="image/*"
-                      capture="environment"
                       onChange={(e) =>
-                        handleImageUpload(e, setClosingImage1, setImagePreview1)
+                        setResolveImage1(e.target.files?.[0] || null)
                       }
                     />
-                    {imagePreview1 && (
-                      <Box mt={2}>
-                        <Text>Preview:</Text>
-                        <img
-                          src={imagePreview1}
-                          alt="Closing Image 1 Preview"
-                          style={{ width: "100%", maxWidth: "150px" }}
-                        />
-                      </Box>
-                    )}
                   </FormControl>
 
                   <FormControl mt={4}>
                     <FormLabel>Upload Closing Image 2</FormLabel>
                     <Input
                       type="file"
-                      accept="image/*"
-                      capture="environment"
                       onChange={(e) =>
-                        handleImageUpload(e, setClosingImage2, setImagePreview2)
+                        setResolveImage2(e.target.files?.[0] || null)
                       }
                     />
-                    {imagePreview2 && (
-                      <Box mt={2}>
-                        <Text>Preview:</Text>
-                        <img
-                          src={imagePreview2}
-                          alt="Closing Image 2 Preview"
-                          style={{ width: "100%", maxWidth: "150px" }}
-                        />
-                      </Box>
-                    )}
                   </FormControl>
                 </>
               ) : (

@@ -97,6 +97,13 @@ export async function POST(req: NextRequest) {
           item.resolving_supervisor = matrixResult.recordset[0].user_name;
           item.resolved_date = matrixResult.recordset[0].resolved_date;
           item.scanned_date = matrixResult.recordset[0].scanned_date;
+          item.resolve_image_1 = matrixResult.recordset[0].resolve_image_1;
+          item.resolve_image_2 = matrixResult.recordset[0].resolve_image_2;
+          item.closing_remarks = matrixResult.recordset[0].closing_remarks;
+          item.closing_user_id = matrixResult.recordset[0].closing_user_id;
+          item.closing_date_time = matrixResult.recordset[0].closing_date_time;
+          item.closing_image_1 = matrixResult.recordset[0].closing_image_1;
+          item.closing_image_2 = matrixResult.recordset[0].closing_image_2;
         }
         filteredData.push(item);
       } else {
