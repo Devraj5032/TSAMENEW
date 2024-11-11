@@ -887,6 +887,20 @@ const SurveyReportAction = () => {
                 </>
               ) : (
                 <>
+                <FormControl isRequired>
+                    <FormLabel>Select Supervisor</FormLabel>
+                    <Select
+                      value={supervisor}
+                      onChange={(e) => setSupervisor(e.target.value)}
+                    >
+                      <option value="">Select supervisor</option>
+                      {supervisors.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.user_name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
                   <FormControl mt={4} position="relative">
                     <FormLabel>Date</FormLabel>
                     <Input
