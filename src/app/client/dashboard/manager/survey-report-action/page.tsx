@@ -343,25 +343,42 @@ const SurveyReportAction = () => {
   };
 
   function handleDownloadCSV() {
-    // Map the survey data to exclude questions and ratings
-    const csvData = apiResponse.map((survey) => ({
-      Code: survey.code,
-      Locality: survey.locality,
-      Area: survey.area,
-      Zone: survey.zone,
-      "Average Rating": formatAverageRating(survey.average_rating),
-      "Scanned Date": survey.scanned_date,
-      Remarks: survey.remarks || "NONE",
-      "Resolving Remarks": survey.resolve_remarks || "N/A",
-      "Resolving Supervisor": survey.resolving_supervisor || "N/A",
-      "Resolved Date": survey.resolved_date || "N/A",
-      "Closing Remarks": survey.closing_remarks || "N/A",
-      "Closing Manager": (survey?.resolving_supervisor && survey.resolving_supervisor[1]) || "N/A",
-      "Closing Date": survey.closing_date_time || "N/A",
-    }));
-
+    // Map the survey data to exclude questions and ratings and calculate additional columns
+    const csvData = apiResponse.map((survey) => {
+      // Calculate number of days between dates
+      const calculateDaysDifference = (startDate, endDate) => {
+        if (!startDate || !endDate) return "N/A"; // Return "N/A" if either date is missing
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const differenceInTime = end - start;
+        return Math.ceil(differenceInTime / (1000 * 60 * 60 * 24)); // Convert ms to days
+      };
+  
+      const daysToResolve = calculateDaysDifference(survey.scanned_date, survey.resolved_date);
+      const daysToClose = calculateDaysDifference(survey.resolved_date, survey.closing_date_time);
+  
+      return {
+        Code: survey.code,
+        Locality: survey.locality,
+        Area: survey.area,
+        Zone: survey.zone,
+        "Average Rating": formatAverageRating(survey.average_rating),
+        "Scanned Date": survey.scanned_date,
+        Remarks: survey.remarks || "NONE",
+        "Resolving Remarks": survey.resolve_remarks || "N/A",
+        "Resolving Supervisor": (survey?.resolving_supervisor && survey.resolving_supervisor[0]) || "N/A",
+        "Resolved Date": survey.resolved_date || "N/A",
+        "Number of Days to Resolve": daysToResolve,
+        "Closing Remarks": survey.closing_remarks || "N/A",
+        "Closing Manager": (survey?.resolving_supervisor && survey.resolving_supervisor[1]) || "N/A",
+        "Closing Date": survey.closing_date_time || "N/A",
+        "Number of Days to Close": daysToClose,
+      };
+    });
+  
     return csvData;
   }
+  
 
   // const handleDownloadCSV = async () => {};
 
@@ -515,7 +532,7 @@ const SurveyReportAction = () => {
                     {/* Remarks Section */}
                     <Box width="300px">
                       <Text fontWeight="bold">Remarks:</Text>
-                      <Text fontWeight="bold" whiteSpace="normal">
+                      <Text whiteSpace="normal">
                         {survey.remarks.length === 0 ? "NONE" : survey.remarks}
                       </Text>
                     </Box>
@@ -686,7 +703,7 @@ const SurveyReportAction = () => {
                               )}
                               <Box>
                               <Text fontWeight="bold">Closing Manager:</Text>
-                              <Text>{survey.closing_user_name}</Text>
+                              <Text>{survey.resolving_supervisor[1]}</Text>
                             </Box>
                               <Box>
                                 <Text fontWeight="bold">
